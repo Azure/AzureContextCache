@@ -2,50 +2,6 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "accountName": {
-            "value": "my-context-cache-account"
-        },
-        "containerName": {
-            "value": "my-context-cache-container"
-        },
-        "location": {
-            "value": "centralus"
-        },
-        "accountKind": {
-            "value": "Regional"
-        },
-        "modelName": {
-            "value": "gpt-5.4"
-        },
-        "provider": {
-            "value": "OpenAI"
-        },
-        "timeToLiveDays": {
-            "value": 7
-        },
-        "existingAzureOpenAIAccountName": {
-            "value": ""
-        },
-        "createOrUpdateAoaiDeployment": {
-            "value": false
-        },
-        "aoaiDeploymentName": {
-            "value": "context-cache-deployment"
-        },
-        "aoaiModelFormat": {
-            "value": "OpenAI"
-        },
-        "aoaiModelName": {
-            "value": "gpt-5.4"
-        },
-        "aoaiModelVersion": {
-            "value": "2026-03-05-contextcache"
-        },
-        "aoaiSkuName": {
-            "value": "Standard"
-        },
-        "aoaiSkuCapacity": {
-            "value": 100
-        }
+        "location": { "value": "centralus" }
     }
 }
