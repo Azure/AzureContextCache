@@ -34,7 +34,7 @@ from pathlib import Path
 import httpx
 
 HERE = Path(__file__).parent
-DEFAULT_API_VERSION = "2026-03-15-preview"
+DEFAULT_API_VERSION = "preview"
 
 
 def _aad_token() -> str:
