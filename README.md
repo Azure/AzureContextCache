@@ -1,80 +1,181 @@
-# Azure Context Cache — One-Click Quickstart
+<div align="center">
 
-Provision an end-to-end Azure Context Cache (Prompt Cache) setup — **Azure OpenAI account + Context Cache account & container + an AOAI deployment that is linked to the cache container** — from a single ARM template, with sensible defaults preconfigured for the **Central US** launch region.
+# Azure Context Cache — Quickstart
 
----
-
-## Deploy
+**Turn on explicit prompt caching for your Azure OpenAI endpoints with a single click.**
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkraman-msft-eng%2FAzureContextCache%2Fmain%2Fazuredeploy.json)
+[![Visualize](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/visualizebutton.svg?sanitize=true)](https://armviz.io/#/?load=https%3A%2F%2Fraw.githubusercontent.com%2Fkraman-msft-eng%2FAzureContextCache%2Fmain%2Fazuredeploy.json)
 
-Pick a subscription + resource group, click **Create**. That's it.
+*Launch region: **Central US** · Preview*
 
-> One-time, per subscription: register the preview features (the deploy will fail with `FeatureNotRegistered` otherwise):
->
-> ```bash
-> az provider register --namespace Microsoft.AzureContextCache
-> az feature  register --namespace Microsoft.AzureContextCache --name EnablePreview
-> az feature  register --namespace Microsoft.CognitiveServices --name OpenAI.ContextCacheAllowed
-> ```
-> Both `EnablePreview` and `OpenAI.ContextCacheAllowed` are gated — email **azurecontextcacherp@microsoft.com** if they stay `Pending`. Or run `./scripts/register-providers.ps1`.
+</div>
 
 ---
 
-## What you get
+## What is explicit context caching?
+
+Modern LLM applications resend the **same large prefix** on every call — a system prompt, a tool catalog, a multi-page document, a few-shot rubric, a long conversation history. The model re-tokenizes and re-attends to that prefix every single time. You pay full input-token price for content that never changes.
+
+**Explicit context caching** lets you tell the service *"this prefix is stable — keep it warm."* The provider stores the tokenized, pre-attended representation of that prefix and, on subsequent requests that begin with the same content, reuses it. The result:
+
+- **Lower latency** — the cached prefix skips re-tokenization and prefill.
+- **Lower cost** — cached input tokens are billed at a steep discount.
+- **Higher throughput** — freed compute means more concurrent requests at the same capacity.
+
+Unlike implicit (best-effort) caching that some endpoints do opportunistically, **explicit** caching is *contractual*: you create a named cache container, you tell the deployment to use it, and your application controls the lifetime.
+
+### How Azure delivers it
+
+Azure exposes explicit caching through a dedicated resource provider — **`Microsoft.AzureContextCache`** — that lives **in your subscription, in your region, under your RBAC**. An Azure OpenAI deployment opts in by setting a single property, `properties.contextCacheContainerId`, on the deployment resource. Once linked, every chat/completion request sent to that deployment automatically benefits from the cache — no SDK changes, no extra headers.
+
+| Concept | Azure resource |
+|---|---|
+| Cache **namespace** for an org/team | `Microsoft.AzureContextCache/accounts` |
+| Cache **storage unit** for a specific model | `Microsoft.AzureContextCache/accounts/containers` |
+| **AOAI deployment** that uses the cache | `Microsoft.CognitiveServices/accounts/deployments` with `properties.contextCacheContainerId` |
+
+This quickstart packages all three (plus the AOAI account itself) into one ARM template so you can be sending cache-aware requests in about two minutes.
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    User([Your app]) -->|chat completions| AOAI
-    subgraph RG["Resource Group · Central US"]
-        AOAI["Azure OpenAI account<br/>Microsoft.CognitiveServices/accounts<br/>kind=OpenAI · SKU S0"]
-        DEP["AOAI deployment<br/>name: context-cache-deployment<br/>model: gpt-5.4 / 2026-03-05-contextcache"]
-        CACHE["Context Cache account<br/>Microsoft.AzureContextCache/accounts<br/>kind=Regional"]
-        CONT["Cache container<br/>default-container<br/>model: gpt-5.4 · TTL 7d"]
-        AOAI --- DEP
-        CACHE --- CONT
-        DEP -.->|properties.contextCacheContainerId| CONT
+    classDef app    fill:#0b3d91,stroke:#0b3d91,color:#ffffff
+    classDef aoai   fill:#107c10,stroke:#0b5a0b,color:#ffffff
+    classDef cache  fill:#5c2d91,stroke:#3b1c5c,color:#ffffff
+    classDef rg     fill:#f5f5f5,stroke:#888,color:#222,stroke-dasharray: 4 3
+
+    User["🧑‍💻 Your application<br/>(OpenAI SDK / REST)"]:::app
+
+    subgraph SUB["Your Azure subscription"]
+        direction TB
+        subgraph RG["Resource group · Central US"]
+            direction LR
+
+            subgraph AOAIBOX["☁️ Azure OpenAI account"]
+                AOAI["Microsoft.CognitiveServices/accounts<br/>kind = OpenAI · SKU S0"]:::aoai
+                DEP["Deployment<br/><b>context-cache-deployment</b><br/>model gpt-5.4 · 2026-03-05-contextcache"]:::aoai
+                AOAI --- DEP
+            end
+
+            subgraph CACHEBOX["⚡ Azure Context Cache"]
+                ACC["Microsoft.AzureContextCache/accounts<br/>kind = Regional"]:::cache
+                CONT["Container<br/><b>default-container</b><br/>model gpt-5.4 · TTL 7d"]:::cache
+                ACC --- CONT
+            end
+
+            DEP -. "properties.<br/>contextCacheContainerId" .-> CONT
+        end
     end
+
+    User -- "chat / completions<br/>(unchanged API)" --> DEP
+    DEP == "cached prefix<br/>hit / miss" ==> CONT
+
+    class RG rg
+    class SUB rg
 ```
 
-A single ARM deployment creates all four resources, with the AOAI deployment's `properties.contextCacheContainerId` already pointing at the new cache container — no extra wiring needed.
+**Request path under the cover**
 
-| # | Resource | Type | API |
-|---|---|---|---|
-| 1 | Azure OpenAI account | `Microsoft.CognitiveServices/accounts` (kind `OpenAI`, SKU `S0`) | `2024-10-01` |
-| 2 | Context Cache account | `Microsoft.AzureContextCache/accounts` (`Regional`) | `2026-01-01-preview` |
-| 3 | Cache container | `Microsoft.AzureContextCache/accounts/containers` (model `gpt-5.4`, TTL 7d) | `2026-01-01-preview` |
-| 4 | AOAI deployment linked to (3) | `Microsoft.CognitiveServices/accounts/deployments` (SKU `Standard`/100) | `2026-03-15-preview` |
+1. Your app calls the AOAI deployment endpoint exactly as it does today (Chat Completions / Responses API).
+2. The deployment, because `properties.contextCacheContainerId` is set, consults the linked Context Cache container for a matching prefix.
+3. On a **hit**, the cached tokenized/pre-attended state is reused; only the suffix (your new turn) is processed end-to-end. You are billed for cached input tokens at the discounted rate.
+4. On a **miss**, the deployment processes the full prompt normally and writes the prefix into the container for future requests, respecting the container's `timeToLive`.
+
+The cache container lives in **your** subscription so you control isolation, region residency, TTL, and lifecycle — and you can swap models or rotate cache contents without touching the AOAI account.
 
 ---
 
-## Defaults
+## One-click deploy
 
-| Setting | Value |
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkraman-msft-eng%2FAzureContextCache%2Fmain%2Fazuredeploy.json)
+
+The button opens the Azure Portal **Custom deployment** blade pre-loaded with [`azuredeploy.json`](azuredeploy.json). You only need to pick:
+
+| Field | Notes |
 |---|---|
-| Region | `centralus` |
-| Name prefix | auto-generated `cc<hash>` |
-| AOAI account name | `<prefix>-aoai` |
-| Cache account name | `<prefix>-cache` |
-| Cache container name | `default-container` |
-| AOAI deployment name | `context-cache-deployment` |
-| Model | `gpt-5.4`, version `2026-03-05-contextcache` |
-| SKU | `Standard`, capacity `100` |
-| TTL | `7` days |
+| **Subscription** | Any subscription where the preview features below are registered. |
+| **Resource group** | New or existing; the four resources will be created here. |
+| **Region** | Defaults to **Central US** (the launch region). Also supported: `swedencentral`. |
+| **Name prefix** | 3–12 lowercase letters/digits. Used to derive `<prefix>-aoai` and `<prefix>-cache`. A unique value is suggested for you. |
 
-The only two template parameters are `location` (default `centralus`) and `namePrefix` (auto-generated).
+Click **Review + create → Create**. When it finishes, the deployment **Outputs** tab gives you the AOAI endpoint, deployment name, and the cache container resource id.
 
----
+### Prerequisite (once per subscription)
 
-## CLI alternative
+The preview features below must be `Registered` before the deployment can succeed. You only need to do this **one time** per subscription:
+
+```bash
+az provider register --namespace Microsoft.AzureContextCache
+az feature  register --namespace Microsoft.AzureContextCache --name EnablePreview
+az feature  register --namespace Microsoft.CognitiveServices --name OpenAI.ContextCacheAllowed
+```
+
+Both features are **gated** — if a status stays `Pending` for more than a few minutes, email **azurecontextcacherp@microsoft.com** for approval. A convenience script is included:
 
 ```powershell
-./scripts/deploy.ps1 -ResourceGroup rg-cc-demo
-# or
-az deployment group create -g rg-cc-demo --template-file ./azuredeploy.json
+./scripts/register-providers.ps1 -SubscriptionId <your-sub-id>
 ```
 
-Use the Bicep equivalent at [bicep/main.bicep](bicep/main.bicep) if you prefer.
+---
+
+## What gets created
+
+| # | Resource | Type | Defaults |
+|---|---|---|---|
+| 1 | Azure OpenAI account | `Microsoft.CognitiveServices/accounts` | kind `OpenAI`, SKU `S0`, public access on |
+| 2 | Context Cache account | `Microsoft.AzureContextCache/accounts` | `accountKind = Regional` |
+| 3 | Cache container | `Microsoft.AzureContextCache/accounts/containers` | model `gpt-5.4`, provider `OpenAI`, `timeToLive = 7d` |
+| 4 | AOAI deployment **linked to (3)** | `Microsoft.CognitiveServices/accounts/deployments` (api `2026-03-15-preview`) | `Standard` / capacity `100`, model `gpt-5.4` v `2026-03-05-contextcache`, `contextCacheContainerId` pre-wired |
+
+All four are created in a single ARM deployment, in the same region, in the resource group you pick. No portal click-through, no follow-up CLI.
+
+---
+
+## Using the cached deployment from your app
+
+Nothing changes in your client code. Point any OpenAI-compatible SDK at the deployment created above and the cache is consulted transparently:
+
+```python
+from openai import AzureOpenAI
+
+client = AzureOpenAI(
+    azure_endpoint = "<azureOpenAIEndpoint from outputs>",
+    api_key        = "<your AOAI key>",
+    api_version    = "2026-03-15-preview",
+)
+
+resp = client.chat.completions.create(
+    model    = "context-cache-deployment",   # the AOAI deployment name
+    messages = [
+        {"role": "system",    "content": LONG_STABLE_SYSTEM_PROMPT},   # cached prefix
+        {"role": "user",      "content": user_turn},                   # varies
+    ],
+)
+```
+
+The longer and more stable your prefix, the larger the savings.
+
+---
+
+## Customization
+
+| To change | Edit |
+|---|---|
+| Region | `location` parameter on the template (`centralus` \| `swedencentral`) |
+| Model / version | `modelName`, `modelVersion` variables in [`azuredeploy.json`](azuredeploy.json) or [`bicep/main.bicep`](bicep/main.bicep) |
+| TTL, SKU, capacity | Same variables block |
+| Use an **existing** AOAI account instead of creating a new one | Delete the AOAI account resource and reference an existing one as the deployment's parent — see [`bicep/main.bicep`](bicep/main.bicep) for the pattern |
+
+A pure CLI flow is also provided:
+
+```powershell
+./scripts/deploy.ps1 -ResourceGroup rg-cc-demo                     # ARM JSON
+./scripts/deploy.ps1 -ResourceGroup rg-cc-demo -UseBicep           # Bicep
+```
 
 ---
 
@@ -82,13 +183,17 @@ Use the Bicep equivalent at [bicep/main.bicep](bicep/main.bicep) if you prefer.
 
 ```
 .
-├── azuredeploy.json            # Single all-in-one ARM template (button target)
-├── azuredeploy.parameters.json
-├── bicep/main.bicep            # Bicep equivalent
-├── bicep/main.bicepparam
+├── azuredeploy.json              # Single all-in-one ARM template (Deploy-to-Azure target)
+├── azuredeploy.parameters.json   # Example parameter file
+├── bicep/
+│   ├── main.bicep                # Bicep equivalent
+│   └── main.bicepparam
+├── prereqs/
+│   ├── assign-reader-role.json   # Optional: Reader for CSRP at sub scope (advanced)
+│   └── assign-reader-role.bicep
 ├── scripts/
-│   ├── register-providers.ps1
-│   └── deploy.ps1
+│   ├── register-providers.ps1    # One-time feature registration
+│   └── deploy.ps1                # Convenience CLI wrapper
 └── .github/workflows/validate.yml
 ```
 
@@ -96,9 +201,16 @@ Use the Bicep equivalent at [bicep/main.bicep](bicep/main.bicep) if you prefer.
 
 ## Troubleshooting
 
-| Symptom | Fix |
+| Symptom | Resolution |
 |---|---|
-| `FeatureNotRegistered` | Run the three `az feature register` commands above; wait until status is `Registered`. Email azurecontextcacherp@microsoft.com if a feature stays `Pending`. |
-| `LocationNotAvailableForResourceType` | Only `centralus` (launch) and `swedencentral` are supported. |
-| `InvalidResourceName` | `namePrefix` must be 3-12 lowercase letters/digits. |
-| AOAI deployment ignores cache | The cache container and AOAI account must be in the same region — this template pins both to `location`. |
+| `FeatureNotRegistered` on deploy | Run the three `az feature register` commands above and wait until each reports `Registered`. Email azurecontextcacherp@microsoft.com if state stays `Pending`. |
+| `LocationNotAvailableForResourceType` | Only `centralus` (launch) and `swedencentral` are supported today. |
+| `InvalidResourceName` | `namePrefix` must be 3–12 lowercase letters/digits. |
+| Cache appears not to be used (no latency / cost improvement) | Confirm your prefix is **byte-identical** across requests, longer than a few hundred tokens, and that traffic is hitting the deployment created by this template (not a sibling deployment without `contextCacheContainerId`). |
+| Need to unlink the cache later | PUT the same deployment with `properties.contextCacheContainerId` omitted (keep `sku` and `model` identical). |
+
+---
+
+<div align="center">
+<sub>Built for the Azure Context Cache preview · Feedback: <a href="mailto:azurecontextcacherp@microsoft.com">azurecontextcacherp@microsoft.com</a></sub>
+</div>
