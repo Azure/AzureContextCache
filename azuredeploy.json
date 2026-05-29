@@ -23,6 +23,21 @@
             "metadata": {
                 "description": "OPTIONAL. Name of an existing Azure OpenAI (Cognitive Services) account in this resource group to attach the cache-linked deployment to. Leave empty to create a new AOAI account (requires S0 account quota)."
             }
+        },
+        "principalId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "OPTIONAL. AAD object ID to grant 'Cognitive Services OpenAI User' role on the AOAI account (so the demo can run keyless via DefaultAzureCredential). Leave empty to auto-detect the deploying user."
+            }
+        },
+        "principalType": {
+            "type": "string",
+            "defaultValue": "User",
+            "allowedValues": [ "User", "ServicePrincipal", "Group" ],
+            "metadata": {
+                "description": "Type of the principal receiving the role assignment. Use 'ServicePrincipal' for a managed identity or service principal."
+            }
         }
     },
     "variables": {
@@ -40,6 +55,10 @@
         "skuCapacity": 100,
         "timeToLiveDays": 7,
         "containerResourceId": "[resourceId('Microsoft.AzureContextCache/accounts/containers', variables('cacheAccountName'), variables('cacheContainerName'))]",
+        "effectivePrincipalId": "[if(empty(parameters('principalId')), deployer().objectId, parameters('principalId'))]",
+        "assignRole": "[and(variables('createAoai'), not(empty(variables('effectivePrincipalId'))))]",
+        "openAiUserRoleId": "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd",
+        "roleAssignmentName": "[guid(resourceId('Microsoft.CognitiveServices/accounts', variables('aoaiAccountName')), variables('effectivePrincipalId'), variables('openAiUserRoleId'))]",
         "tags": {
             "sample": "azure-context-cache-quickstart",
             "environment": "demo"
@@ -111,6 +130,22 @@
                 },
                 "contextCacheContainerId": "[variables('containerResourceId')]"
             }
+        },
+        {
+            "comments": "5. Grant the deploying user (or a passed-in principal) 'Cognitive Services OpenAI User' on the AOAI account so the included demo can run keyless via DefaultAzureCredential.",
+            "condition": "[variables('assignRole')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('roleAssignmentName')]",
+            "scope": "[concat('Microsoft.CognitiveServices/accounts/', variables('aoaiAccountName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.CognitiveServices/accounts', variables('aoaiAccountName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('openAiUserRoleId'))]",
+                "principalId": "[variables('effectivePrincipalId')]",
+                "principalType": "[parameters('principalType')]"
+            }
         }
     ],
     "outputs": {
@@ -120,6 +155,7 @@
         "contextCacheAccountName":{ "type": "string", "value": "[variables('cacheAccountName')]" },
         "contextCacheContainerId":{ "type": "string", "value": "[variables('containerResourceId')]" },
         "modelName":              { "type": "string", "value": "[variables('modelName')]" },
-        "modelVersion":           { "type": "string", "value": "[variables('modelVersion')]" }
+        "modelVersion":           { "type": "string", "value": "[variables('modelVersion')]" },
+        "openAIUserPrincipalId":  { "type": "string", "value": "[if(variables('assignRole'), variables('effectivePrincipalId'), '')]" }
     }
 }
