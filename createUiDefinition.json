@@ -1,0 +1,56 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+    "handler": "Microsoft.Azure.CreateUIDef",
+    "version": "0.1.2-preview",
+    "parameters": {
+        "basics": [
+            {
+                "name": "namePrefix",
+                "type": "Microsoft.Common.TextBox",
+                "label": "Name prefix",
+                "defaultValue": "",
+                "toolTip": "3-12 lowercase letters/digits. Used to name <prefix>-aoai and <prefix>-cache. Leave blank to auto-generate.",
+                "placeholder": "auto-generated if left blank (e.g. cc7f3a2b1c0d)",
+                "constraints": {
+                    "required": false,
+                    "regex": "^$|^[a-z0-9]{3,12}$",
+                    "validationMessage": "3-12 lowercase letters or digits, or leave empty to auto-generate."
+                },
+                "visible": true
+            },
+            {
+                "name": "useExistingAoai",
+                "type": "Microsoft.Common.OptionsGroup",
+                "label": "Azure OpenAI account",
+                "defaultValue": "Create new",
+                "toolTip": "Create a brand-new AOAI account, or attach the cache to an existing one in this resource group (skips S0 account-quota usage).",
+                "constraints": {
+                    "allowedValues": [
+                        { "label": "Create new", "value": "new" },
+                        { "label": "Use existing in this resource group", "value": "existing" }
+                    ],
+                    "required": true
+                }
+            },
+            {
+                "name": "existingAoaiAccountName",
+                "type": "Microsoft.Common.TextBox",
+                "label": "Existing AOAI account name",
+                "defaultValue": "",
+                "toolTip": "Name of an Azure OpenAI (Cognitive Services) account that already exists in the selected resource group.",
+                "placeholder": "e.g. my-aoai-account",
+                "constraints": {
+                    "required": true,
+                    "regex": "^[a-zA-Z0-9-]{2,64}$",
+                    "validationMessage": "Enter a valid Cognitive Services account name."
+                },
+                "visible": "[equals(basics('useExistingAoai'), 'existing')]"
+            }
+        ],
+        "steps": [],
+        "outputs": {
+            "namePrefix": "[if(empty(basics('namePrefix')), concat('cc', substring(uniqueString(subscription().subscriptionId, resourceGroup().id), 0, 10)), basics('namePrefix'))]",
+            "existingAoaiAccountName": "[if(equals(basics('useExistingAoai'), 'existing'), basics('existingAoaiAccountName'), '')]"
+        }
+    }
+}
