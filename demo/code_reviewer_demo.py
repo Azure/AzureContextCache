@@ -168,10 +168,15 @@ def main() -> int:
 
     print("-" * 72)
     print(f"mean latency        : {statistics.mean(latencies):>7.0f} ms")
-    if warm_latencies:
-        speedup = (first_latency / statistics.mean(warm_latencies)) if first_latency else 0.0
+    if first_latency is not None:
         print(f"call 1 (cold)       : {first_latency:>7.0f} ms")
-        print(f"calls 2..N (warm)   : {statistics.mean(warm_latencies):>7.0f} ms mean   →   {speedup:.2f}× speedup")
+    if warm_latencies:
+        warm_mean = statistics.mean(warm_latencies)
+        print(f"calls 2..N (warm)   : {warm_mean:>7.0f} ms mean", end="")
+        if first_latency:
+            print(f"   →   {(first_latency / warm_mean):.2f}× speedup")
+        else:
+            print("   (call 1 failed; no cold baseline)")
     print(f"mean cached prefix  : {statistics.mean(cached_pcts):>6.1f}% of input tokens")
     if statistics.mean(cached_pcts) < 1:
         print("\n⚠  cached_tokens is ~0. Things to check:")
