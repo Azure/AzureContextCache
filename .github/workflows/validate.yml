@@ -1,0 +1,30 @@
+name: Validate templates
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: Bicep build (main)
+        run: az bicep build --file bicep/main.bicep --stdout > /dev/null
+
+      - name: Bicep build (prereqs)
+        run: az bicep build --file prereqs/assign-reader-role.bicep --stdout > /dev/null
+
+      - name: ARM JSON syntax check
+        run: |
+          for f in azuredeploy.json prereqs/assign-reader-role.json; do
+            echo "Validating $f"
+            python -c "import json,sys; json.load(open('$f'))"
+          done

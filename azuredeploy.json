@@ -1,0 +1,162 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "_generator": {
+            "name": "azure-context-cache-quickstart",
+            "version": "1.0.0"
+        },
+        "description": "One-click deployment for an Azure Context Cache account + container, optionally associated with an existing Azure OpenAI endpoint."
+    },
+    "parameters": {
+        "accountName": {
+            "type": "string",
+            "defaultValue": "[concat('cc', uniqueString(resourceGroup().id))]",
+            "minLength": 3,
+            "maxLength": 24,
+            "metadata": {
+                "description": "Context Cache account name. 3-24 chars: lowercase letters, digits, hyphens; must start/end with letter or digit."
+            }
+        },
+        "containerName": {
+            "type": "string",
+            "defaultValue": "default-container",
+            "minLength": 3,
+            "maxLength": 63,
+            "metadata": {
+                "description": "Container name. 3-63 chars: lowercase letters, digits, hyphens; must start/end with letter or digit."
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "swedencentral",
+            "allowedValues": [
+                "swedencentral"
+            ],
+            "metadata": {
+                "description": "Region for the Context Cache resources. Only 'swedencentral' is currently supported."
+            }
+        },
+        "accountKind": {
+            "type": "string",
+            "defaultValue": "Regional",
+            "allowedValues": [
+                "Regional",
+                "DataZone",
+                "Global"
+            ],
+            "metadata": {
+                "description": "Account kind for the Context Cache account."
+            }
+        },
+        "modelName": {
+            "type": "string",
+            "defaultValue": "gpt-4",
+            "metadata": {
+                "description": "Model name to associate with the cache container. Must match an Azure OpenAI deployment's underlying model (e.g., gpt-4, gpt-4o, gpt-4o-mini)."
+            }
+        },
+        "provider": {
+            "type": "string",
+            "defaultValue": "OpenAI",
+            "allowedValues": [
+                "OpenAI"
+            ],
+            "metadata": {
+                "description": "Model provider. OpenAI is currently the only supported value (covers Azure OpenAI deployments)."
+            }
+        },
+        "timeToLiveDays": {
+            "type": "int",
+            "defaultValue": 7,
+            "minValue": 1,
+            "maxValue": 30,
+            "metadata": {
+                "description": "Container cache entry time-to-live, in days."
+            }
+        },
+        "existingAzureOpenAIAccountName": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional. Name of an existing Azure OpenAI (Cognitive Services) account in this resource group to associate via outputs. Leave blank to skip association."
+            }
+        },
+        "tagsByResource": {
+            "type": "object",
+            "defaultValue": {
+                "environment": "demo",
+                "sample": "azure-context-cache-quickstart"
+            },
+            "metadata": {
+                "description": "Tags applied to created resources."
+            }
+        }
+    },
+    "variables": {
+        "associateAoai": "[not(empty(parameters('existingAzureOpenAIAccountName')))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.AzureContextCache/accounts",
+            "apiVersion": "2026-01-01-preview",
+            "name": "[parameters('accountName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('tagsByResource')]",
+            "properties": {
+                "accountKind": "[parameters('accountKind')]",
+                "description": "Context Cache account provisioned via azure-context-cache-quickstart"
+            },
+            "resources": [
+                {
+                    "type": "containers",
+                    "apiVersion": "2026-01-01-preview",
+                    "name": "[parameters('containerName')]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.AzureContextCache/accounts', parameters('accountName'))]"
+                    ],
+                    "properties": {
+                        "description": "[concat('Prompt cache container for ', parameters('modelName'))]",
+                        "modelName": "[parameters('modelName')]",
+                        "provider": "[parameters('provider')]",
+                        "timeToLive": "[parameters('timeToLiveDays')]"
+                    }
+                }
+            ]
+        }
+    ],
+    "outputs": {
+        "contextCacheAccountId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.AzureContextCache/accounts', parameters('accountName'))]"
+        },
+        "contextCacheAccountName": {
+            "type": "string",
+            "value": "[parameters('accountName')]"
+        },
+        "containerId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.AzureContextCache/accounts/containers', parameters('accountName'), parameters('containerName'))]"
+        },
+        "containerName": {
+            "type": "string",
+            "value": "[parameters('containerName')]"
+        },
+        "modelName": {
+            "type": "string",
+            "value": "[parameters('modelName')]"
+        },
+        "associatedAzureOpenAIAccountId": {
+            "type": "string",
+            "value": "[if(variables('associateAoai'), resourceId('Microsoft.CognitiveServices/accounts', parameters('existingAzureOpenAIAccountName')), '')]"
+        },
+        "associatedAzureOpenAIEndpoint": {
+            "type": "string",
+            "value": "[if(variables('associateAoai'), reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('existingAzureOpenAIAccountName')), '2024-10-01', 'Full').properties.endpoint, '')]"
+        },
+        "nextSteps": {
+            "type": "string",
+            "value": "[concat('Context Cache container ready. Use container resource id with your Azure OpenAI client by setting the cache container header/parameter to: ', resourceId('Microsoft.AzureContextCache/accounts/containers', parameters('accountName'), parameters('containerName')))]"
+        }
+    }
+}
