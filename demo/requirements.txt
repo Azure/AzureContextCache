@@ -1,2 +1,2 @@
 httpx>=0.27
-azure-identity>=1.17  ; extra == "aad"
+azure-identity>=1.17
