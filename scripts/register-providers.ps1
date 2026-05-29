@@ -32,18 +32,30 @@ az provider register --namespace Microsoft.AzureContextCache | Out-Null
 Write-Host "Registering preview feature Microsoft.AzureContextCache/EnablePreview..." -ForegroundColor Cyan
 az feature register --namespace Microsoft.AzureContextCache --name EnablePreview | Out-Null
 
+Write-Host "Registering preview feature Microsoft.CognitiveServices/OpenAI.ContextCacheAllowed..." -ForegroundColor Cyan
+az feature register --namespace Microsoft.CognitiveServices --name OpenAI.ContextCacheAllowed | Out-Null
+
+Write-Host "Ensuring Microsoft.CognitiveServices provider is registered..." -ForegroundColor Cyan
+az provider register --namespace Microsoft.CognitiveServices | Out-Null
+
 Write-Host ""
 Write-Host "Current registration status:" -ForegroundColor Yellow
-$providerState = az provider show --namespace Microsoft.AzureContextCache --query registrationState -o tsv
-$featureState  = az feature show --namespace Microsoft.AzureContextCache --name EnablePreview --query properties.state -o tsv
+$providerState   = az provider show --namespace Microsoft.AzureContextCache --query registrationState -o tsv
+$featureState    = az feature show --namespace Microsoft.AzureContextCache --name EnablePreview --query properties.state -o tsv
+$aoaiFeatState   = az feature show --namespace Microsoft.CognitiveServices --name OpenAI.ContextCacheAllowed --query properties.state -o tsv
+$csProviderState = az provider show --namespace Microsoft.CognitiveServices --query registrationState -o tsv
 
-Write-Host ("  Provider Microsoft.AzureContextCache : {0}" -f $providerState)
-Write-Host ("  Feature  EnablePreview               : {0}" -f $featureState)
+Write-Host ("  Provider Microsoft.AzureContextCache       : {0}" -f $providerState)
+Write-Host ("  Feature  EnablePreview                      : {0}" -f $featureState)
+Write-Host ("  Provider Microsoft.CognitiveServices       : {0}" -f $csProviderState)
+Write-Host ("  Feature  OpenAI.ContextCacheAllowed         : {0}" -f $aoaiFeatState)
 
-if ($providerState -ne 'Registered' -or $featureState -ne 'Registered') {
+$allGood = ($providerState -eq 'Registered') -and ($featureState -eq 'Registered') -and ($csProviderState -eq 'Registered') -and ($aoaiFeatState -eq 'Registered')
+
+if (-not $allGood) {
     Write-Host ""
-    Write-Host "Registration is asynchronous. Re-run this script in a few minutes if state is still 'Registering'." -ForegroundColor Yellow
-    Write-Host "If the feature stays 'Pending', email azurecontextcacherp@microsoft.com for approval." -ForegroundColor Yellow
+    Write-Host "Registration is asynchronous. Re-run this script in a few minutes if any state is still 'Registering'." -ForegroundColor Yellow
+    Write-Host "If a gated feature stays 'Pending', email azurecontextcacherp@microsoft.com for approval." -ForegroundColor Yellow
 }
 else {
     Write-Host ""

@@ -4,9 +4,9 @@
     "metadata": {
         "_generator": {
             "name": "azure-context-cache-quickstart",
-            "version": "1.0.0"
+            "version": "1.1.0"
         },
-        "description": "One-click deployment for an Azure Context Cache account + container, optionally associated with an existing Azure OpenAI endpoint."
+        "description": "One-click deployment for an Azure Context Cache account + container, with optional creation/update of an Azure OpenAI deployment linked to that container via properties.contextCacheContainerId."
     },
     "parameters": {
         "accountName": {
@@ -24,17 +24,18 @@
             "minLength": 3,
             "maxLength": 63,
             "metadata": {
-                "description": "Container name. 3-63 chars: lowercase letters, digits, hyphens; must start/end with letter or digit."
+                "description": "Context Cache container name. 3-63 chars."
             }
         },
         "location": {
             "type": "string",
-            "defaultValue": "swedencentral",
+            "defaultValue": "centralus",
             "allowedValues": [
+                "centralus",
                 "swedencentral"
             ],
             "metadata": {
-                "description": "Region for the Context Cache resources. Only 'swedencentral' is currently supported."
+                "description": "Region for the Context Cache resources. 'centralus' is the launch region; 'swedencentral' is also supported."
             }
         },
         "accountKind": {
@@ -51,9 +52,9 @@
         },
         "modelName": {
             "type": "string",
-            "defaultValue": "gpt-4",
+            "defaultValue": "gpt-5.4",
             "metadata": {
-                "description": "Model name to associate with the cache container. Must match an Azure OpenAI deployment's underlying model (e.g., gpt-4, gpt-4o, gpt-4o-mini)."
+                "description": "Model name to bind to the cache container (e.g. gpt-5.4, gpt-4o)."
             }
         },
         "provider": {
@@ -63,7 +64,7 @@
                 "OpenAI"
             ],
             "metadata": {
-                "description": "Model provider. OpenAI is currently the only supported value (covers Azure OpenAI deployments)."
+                "description": "Model provider. OpenAI is currently the only supported value."
             }
         },
         "timeToLiveDays": {
@@ -79,7 +80,56 @@
             "type": "string",
             "defaultValue": "",
             "metadata": {
-                "description": "Optional. Name of an existing Azure OpenAI (Cognitive Services) account in this resource group to associate via outputs. Leave blank to skip association."
+                "description": "Optional. Name of an existing Azure OpenAI account in this resource group. When provided AND createOrUpdateAoaiDeployment is true, a deployment linked to the new context cache container is created/updated under it. Must be in the same region as the context cache container."
+            }
+        },
+        "createOrUpdateAoaiDeployment": {
+            "type": "bool",
+            "defaultValue": false,
+            "metadata": {
+                "description": "If true and existingAzureOpenAIAccountName is set, creates/updates an AOAI deployment with properties.contextCacheContainerId pointing at the new container."
+            }
+        },
+        "aoaiDeploymentName": {
+            "type": "string",
+            "defaultValue": "context-cache-deployment",
+            "metadata": {
+                "description": "Name of the AOAI deployment to create/update."
+            }
+        },
+        "aoaiModelFormat": {
+            "type": "string",
+            "defaultValue": "OpenAI",
+            "metadata": {
+                "description": "AOAI deployment model.format."
+            }
+        },
+        "aoaiModelName": {
+            "type": "string",
+            "defaultValue": "gpt-5.4",
+            "metadata": {
+                "description": "AOAI deployment model.name. Should match modelName."
+            }
+        },
+        "aoaiModelVersion": {
+            "type": "string",
+            "defaultValue": "2026-03-05-contextcache",
+            "metadata": {
+                "description": "AOAI deployment model.version. Must be a context-cache-capable version."
+            }
+        },
+        "aoaiSkuName": {
+            "type": "string",
+            "defaultValue": "Standard",
+            "metadata": {
+                "description": "AOAI deployment SKU name."
+            }
+        },
+        "aoaiSkuCapacity": {
+            "type": "int",
+            "defaultValue": 100,
+            "metadata": {
+                "description": "AOAI deployment SKU capacity (TPM units)."
             }
         },
         "tagsByResource": {
@@ -94,7 +144,9 @@
         }
     },
     "variables": {
-        "associateAoai": "[not(empty(parameters('existingAzureOpenAIAccountName')))]"
+        "associateAoai": "[not(empty(parameters('existingAzureOpenAIAccountName')))]",
+        "deployAoaiDeployment": "[and(variables('associateAoai'), parameters('createOrUpdateAoaiDeployment'))]",
+        "containerResourceId": "[resourceId('Microsoft.AzureContextCache/accounts/containers', parameters('accountName'), parameters('containerName'))]"
     },
     "resources": [
         {
@@ -123,6 +175,27 @@
                     }
                 }
             ]
+        },
+        {
+            "condition": "[variables('deployAoaiDeployment')]",
+            "type": "Microsoft.CognitiveServices/accounts/deployments",
+            "apiVersion": "2026-03-15-preview",
+            "name": "[concat(parameters('existingAzureOpenAIAccountName'), '/', parameters('aoaiDeploymentName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.AzureContextCache/accounts/containers', parameters('accountName'), parameters('containerName'))]"
+            ],
+            "sku": {
+                "name": "[parameters('aoaiSkuName')]",
+                "capacity": "[parameters('aoaiSkuCapacity')]"
+            },
+            "properties": {
+                "model": {
+                    "format": "[parameters('aoaiModelFormat')]",
+                    "name": "[parameters('aoaiModelName')]",
+                    "version": "[parameters('aoaiModelVersion')]"
+                },
+                "contextCacheContainerId": "[variables('containerResourceId')]"
+            }
         }
     ],
     "outputs": {
@@ -136,7 +209,7 @@
         },
         "containerId": {
             "type": "string",
-            "value": "[resourceId('Microsoft.AzureContextCache/accounts/containers', parameters('accountName'), parameters('containerName'))]"
+            "value": "[variables('containerResourceId')]"
         },
         "containerName": {
             "type": "string",
@@ -154,9 +227,17 @@
             "type": "string",
             "value": "[if(variables('associateAoai'), reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('existingAzureOpenAIAccountName')), '2024-10-01', 'Full').properties.endpoint, '')]"
         },
+        "aoaiDeploymentId": {
+            "type": "string",
+            "value": "[if(variables('deployAoaiDeployment'), resourceId('Microsoft.CognitiveServices/accounts/deployments', parameters('existingAzureOpenAIAccountName'), parameters('aoaiDeploymentName')), '')]"
+        },
+        "aoaiDeploymentName": {
+            "type": "string",
+            "value": "[if(variables('deployAoaiDeployment'), parameters('aoaiDeploymentName'), '')]"
+        },
         "nextSteps": {
             "type": "string",
-            "value": "[concat('Context Cache container ready. Use container resource id with your Azure OpenAI client by setting the cache container header/parameter to: ', resourceId('Microsoft.AzureContextCache/accounts/containers', parameters('accountName'), parameters('containerName')))]"
+            "value": "[concat('Context Cache container ready: ', variables('containerResourceId'), '. ', if(variables('deployAoaiDeployment'), concat('AOAI deployment ', parameters('aoaiDeploymentName'), ' is linked to this container.'), 'To link an AOAI deployment, PUT properties.contextCacheContainerId = <containerId> on a Microsoft.CognitiveServices/accounts/deployments resource (api-version 2026-03-15-preview).'))]"
         }
     }
 }
