@@ -11,11 +11,10 @@
     "parameters": {
         "namePrefix": {
             "type": "string",
-            "defaultValue": "[concat('cc', substring(uniqueString(resourceGroup().id), 0, 10))]",
-            "minLength": 3,
+            "defaultValue": "",
             "maxLength": 12,
             "metadata": {
-                "description": "Short prefix used to name the three resources. 3-12 lowercase letters/digits."
+                "description": "Short prefix used to name the cache resources. 3-12 lowercase letters/digits, or leave empty to auto-generate."
             }
         },
         "existingAoaiAccountName": {
@@ -27,10 +26,11 @@
         }
     },
     "variables": {
+        "effectiveNamePrefix": "[if(empty(parameters('namePrefix')), concat('cc', substring(uniqueString(resourceGroup().id), 0, 10)), parameters('namePrefix'))]",
         "createAoai": "[empty(parameters('existingAoaiAccountName'))]",
-        "newAoaiAccountName": "[concat(parameters('namePrefix'), '-aoai')]",
+        "newAoaiAccountName": "[concat(variables('effectiveNamePrefix'), '-aoai')]",
         "aoaiAccountName": "[if(variables('createAoai'), variables('newAoaiAccountName'), parameters('existingAoaiAccountName'))]",
-        "cacheAccountName": "[concat(parameters('namePrefix'), '-cache')]",
+        "cacheAccountName": "[concat(variables('effectiveNamePrefix'), '-cache')]",
         "cacheContainerName": "default-container",
         "aoaiDeploymentName": "context-cache-deployment",
         "modelName": "gpt-5.4",

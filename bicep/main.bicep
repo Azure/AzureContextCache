@@ -6,7 +6,7 @@ param namePrefix string = 'cc${substring(uniqueString(resourceGroup().id), 0, 10
 var location           = resourceGroup().location
 
 var aoaiAccountName    = '${namePrefix}-aoai'
-var cacheAccountName   = '${namePrefix}-cache'
+var cacheAccountName   = '${effectiveNamePrefix}-cache'
 var cacheContainerName = 'default-container'
 var aoaiDeploymentName = 'context-cache-deployment'
 var modelName          = 'gpt-5.4'

@@ -49,7 +49,7 @@
         ],
         "steps": [],
         "outputs": {
-            "namePrefix": "[if(empty(basics('namePrefix')), concat('cc', substring(uniqueString(subscription().subscriptionId, resourceGroup().id), 0, 10)), basics('namePrefix'))]",
+            "namePrefix": "[basics('namePrefix')]",
             "existingAoaiAccountName": "[if(equals(basics('useExistingAoai'), 'existing'), basics('existingAoaiAccountName'), '')]"
         }
     }
