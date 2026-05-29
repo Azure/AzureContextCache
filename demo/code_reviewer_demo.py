@@ -84,6 +84,8 @@ def build_payload(deployment: str, system_prompt: str, diff_name: str, diff_body
             },
         ],
         "max_output_tokens": max_output_tokens,
+        # Enables SSD-backed prompt cache (pre-req for remote cache).
+        "prompt_cache_retention": "24h",
     }
 
 
