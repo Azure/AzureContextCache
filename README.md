@@ -107,12 +107,13 @@ Click **Review + create → Create**. When it finishes, the deployment **Outputs
 
 ### Prerequisite (once per subscription)
 
+For private preview onboarding, please reach out to **azurecontextcacherp@microsoft.com** to get OpenAI.ContextCacheAllowed feature enabled.
+
 The preview features below must be `Registered` before the deployment can succeed. You only need to do this **one time** per subscription:
 
 ```bash
 az provider register --namespace Microsoft.AzureContextCache
 az feature  register --namespace Microsoft.AzureContextCache --name EnablePreview
-az feature  register --namespace Microsoft.CognitiveServices --name OpenAI.ContextCacheAllowed
 ```
 
 Both features are **gated** — if a status stays `Pending` for more than a few minutes, email **azurecontextcacherp@microsoft.com** for approval. A convenience script is included:
