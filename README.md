@@ -27,12 +27,12 @@ Unlike implicit (best-effort) caching that some endpoints do opportunistically, 
 
 ### How Azure delivers it
 
-Azure exposes explicit caching through a dedicated resource provider — **`Microsoft.AzureContextCache`** — that lives **in your subscription, in your region, under your RBAC**. An Azure OpenAI deployment opts in by setting a single property, `properties.contextCacheContainerId`, on the deployment resource. Once linked, every chat/completion request sent to that deployment automatically benefits from the cache — no SDK changes, no extra headers.
+Azure exposes explicit caching through the Storage resource provider — **`Microsoft.Storage`** — that lives **in your subscription, in your region, under your RBAC**. An Azure OpenAI deployment opts in by setting a single property, `properties.contextCacheContainerId`, on the deployment resource. Once linked, every chat/completion request sent to that deployment automatically benefits from the cache — no SDK changes, no extra headers.
 
 | Concept | Azure resource |
 |---|---|
-| Cache **namespace** for an org/team | `Microsoft.AzureContextCache/accounts` |
-| Cache **storage unit** for a specific model | `Microsoft.AzureContextCache/accounts/containers` |
+| Cache **namespace** for an org/team | `Microsoft.Storage/contextCaches` |
+| Cache **storage unit** for a specific model | `Microsoft.Storage/contextCaches/contextCacheContainers` |
 | **AOAI deployment** that uses the cache | `Microsoft.CognitiveServices/accounts/deployments` with `properties.contextCacheContainerId` |
 
 This quickstart packages all three (plus the AOAI account itself) into one ARM template so you can be sending cache-aware requests in about two minutes.
@@ -62,7 +62,7 @@ flowchart LR
             end
 
             subgraph CACHEBOX["⚡ Azure Context Cache"]
-                ACC["Microsoft.AzureContextCache/accounts<br/>kind = Regional"]:::cache
+                ACC["Microsoft.Storage/contextCaches<br/>kind = Regional"]:::cache
                 CONT["Container<br/><b>default-container</b><br/>model gpt-5.4 · TTL 7d"]:::cache
                 ACC --- CONT
             end
@@ -110,8 +110,7 @@ Click **Review + create → Create**. When it finishes, the deployment **Outputs
 The preview features below must be `Registered` before the deployment can succeed. You only need to do this **one time** per subscription:
 
 ```bash
-az provider register --namespace Microsoft.AzureContextCache
-az feature  register --namespace Microsoft.AzureContextCache --name EnablePreview
+az provider register --namespace Microsoft.Storage
 az feature  register --namespace Microsoft.CognitiveServices --name OpenAI.ContextCacheAllowed
 ```
 
@@ -128,8 +127,8 @@ Both features are **gated** — if a status stays `Pending` for more than a few 
 | # | Resource | Type | Defaults |
 |---|---|---|---|
 | 1 | Azure OpenAI account | `Microsoft.CognitiveServices/accounts` | kind `OpenAI`, SKU `S0`, public access on |
-| 2 | Context Cache account | `Microsoft.AzureContextCache/accounts` | `accountKind = Regional` |
-| 3 | Cache container | `Microsoft.AzureContextCache/accounts/containers` | model `gpt-5.4`, provider `OpenAI`, `timeToLive = 7d` |
+| 2 | Context Cache account | `Microsoft.Storage/contextCaches` | `accountKind = Regional` |
+| 3 | Cache container | `Microsoft.Storage/contextCaches/contextCacheContainers` | model `gpt-5.4`, provider `OpenAI`, `timeToLive = 7d` |
 | 4 | AOAI deployment **linked to (3)** | `Microsoft.CognitiveServices/accounts/deployments` (api `2026-03-15-preview`) | `Standard` / capacity `100`, model `gpt-5.4` v `2026-03-05-contextcache`, `contextCacheContainerId` pre-wired |
 
 All four are created in a single ARM deployment, in the same region, in the resource group you pick. No portal click-through, no follow-up CLI.

@@ -54,7 +54,7 @@
         "skuName": "Standard",
         "skuCapacity": 100,
         "timeToLiveDays": 7,
-        "containerResourceId": "[resourceId('Microsoft.AzureContextCache/accounts/containers', variables('cacheAccountName'), variables('cacheContainerName'))]",
+        "containerResourceId": "[resourceId('Microsoft.Storage/contextCaches/contextCacheContainers', variables('cacheAccountName'), variables('cacheContainerName'))]",
         "effectivePrincipalId": "[if(empty(parameters('principalId')), deployer().objectId, parameters('principalId'))]",
         "assignRole": "[and(variables('createAoai'), not(empty(variables('effectivePrincipalId'))))]",
         "openAiUserRoleId": "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd",
@@ -84,7 +84,7 @@
         },
         {
             "comments": "2. Context Cache account.",
-            "type": "Microsoft.AzureContextCache/accounts",
+            "type": "Microsoft.Storage/contextCaches",
             "apiVersion": "2026-01-01-preview",
             "name": "[variables('cacheAccountName')]",
             "location": "[resourceGroup().location]",
@@ -96,11 +96,11 @@
         },
         {
             "comments": "3. Context Cache container bound to the chosen model.",
-            "type": "Microsoft.AzureContextCache/accounts/containers",
+            "type": "Microsoft.Storage/contextCaches/contextCacheContainers",
             "apiVersion": "2026-01-01-preview",
             "name": "[concat(variables('cacheAccountName'), '/', variables('cacheContainerName'))]",
             "dependsOn": [
-                "[resourceId('Microsoft.AzureContextCache/accounts', variables('cacheAccountName'))]"
+                "[resourceId('Microsoft.Storage/contextCaches', variables('cacheAccountName'))]"
             ],
             "properties": {
                 "description": "[concat('Prompt cache container for ', variables('modelName'))]",
@@ -116,7 +116,7 @@
             "name": "[concat(variables('aoaiAccountName'), '/', variables('aoaiDeploymentName'))]",
             "dependsOn": [
                 "[resourceId('Microsoft.CognitiveServices/accounts', variables('aoaiAccountName'))]",
-                "[resourceId('Microsoft.AzureContextCache/accounts/containers', variables('cacheAccountName'), variables('cacheContainerName'))]"
+                "[resourceId('Microsoft.Storage/contextCaches/contextCacheContainers', variables('cacheAccountName'), variables('cacheContainerName'))]"
             ],
             "sku": {
                 "name": "[variables('skuName')]",

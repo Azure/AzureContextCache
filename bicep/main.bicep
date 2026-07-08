@@ -45,7 +45,7 @@ resource aoai 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
   name: aoaiAccountName
 }
 
-resource cacheAccount 'Microsoft.AzureContextCache/accounts@2026-01-01-preview' = {
+resource cacheAccount 'Microsoft.Storage/contextCaches@2026-01-01-preview' = {
   name: cacheAccountName
   location: location
   tags: tags
@@ -55,7 +55,7 @@ resource cacheAccount 'Microsoft.AzureContextCache/accounts@2026-01-01-preview' 
   }
 }
 
-resource cacheContainer 'Microsoft.AzureContextCache/accounts/containers@2026-01-01-preview' = {
+resource cacheContainer 'Microsoft.Storage/contextCaches/contextCacheContainers@2026-01-01-preview' = {
   parent: cacheAccount
   name: cacheContainerName
   properties: {
