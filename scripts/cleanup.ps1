@@ -105,8 +105,8 @@ if (-not $PSCmdlet.ShouldProcess("$ResourceGroup/$CacheAccountName + $AoaiAccoun
     return
 }
 
-$cacheContainerId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.AzureContextCache/accounts/$CacheAccountName/containers/$CacheContainerName"
-$cacheAccountId   = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.AzureContextCache/accounts/$CacheAccountName"
+$cacheContainerId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Storage/contextCaches/$CacheAccountName/contextCacheContainers/$CacheContainerName"
+$cacheAccountId   = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Storage/contextCaches/$CacheAccountName"
 $aoaiDeploymentId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.CognitiveServices/accounts/$AoaiAccountName/deployments/$AoaiDeploymentName"
 $aoaiAccountId    = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.CognitiveServices/accounts/$AoaiAccountName"
 

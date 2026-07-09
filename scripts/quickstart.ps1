@@ -5,8 +5,8 @@
 .DESCRIPTION
     Single-script equivalent of the "Deploy to Azure" portal flow. Walks through:
       1. Login / subscription selection.
-      2. Resource provider + preview-feature registration (Microsoft.AzureContextCache,
-         Microsoft.AzureContextCache/EnablePreview, Microsoft.CognitiveServices/OpenAI.ContextCacheAllowed).
+      2. Resource provider + preview-feature registration (Microsoft.Storage,
+         Microsoft.CognitiveServices/OpenAI.ContextCacheAllowed).
          Auto-registers anything not yet 'Registered' and waits for it.
       3. Resource group create (if missing).
       4. ARM template deploy (azure-context-cache-quickstart/azuredeploy.json) - auto-grants
@@ -167,9 +167,8 @@ if ($NamePrefix -and ($NamePrefix -notmatch '^[a-z0-9]{3,12}$')) {
 Write-Step "Validating RP + preview-feature registration"
 
 $checks = @(
-    @{ Kind='provider'; Namespace='Microsoft.AzureContextCache'; Name=$null }
+    @{ Kind='provider'; Namespace='Microsoft.Storage'; Name=$null }
     @{ Kind='provider'; Namespace='Microsoft.CognitiveServices';  Name=$null }
-    @{ Kind='feature';  Namespace='Microsoft.AzureContextCache';  Name='EnablePreview' }
     @{ Kind='feature';  Namespace='Microsoft.CognitiveServices';  Name='OpenAI.ContextCacheAllowed' }
 )
 
