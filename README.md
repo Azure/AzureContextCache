@@ -120,6 +120,45 @@ Both features are **gated** — if a status stays `Pending` for more than a few 
 ./scripts/register-providers.ps1 -SubscriptionId <your-sub-id>
 ```
 
+### Run the all-in-one quickstart on macOS
+
+Install PowerShell 7, Azure CLI, and Python 3, then run the same cross-platform script from a `pwsh` terminal:
+
+```bash
+brew install --cask powershell
+brew install azure-cli python
+
+az login
+pwsh -File ./scripts/quickstart.ps1 \
+    -SubscriptionId <your-sub-id> \
+    -ResourceGroup <your-resource-group>
+```
+
+The script accepts the same parameters on Windows and macOS. It creates an isolated Python virtual environment and runs the demo with Azure AD authentication; no API key is required.
+
+### Required Azure access
+
+The simplest option is to give the deploying customer **Owner** on the target subscription for the deployment window. Owner covers resource-group creation, provider/feature registration, resource deployment, and the role assignment created by this template. Remove or reduce that access after validation.
+
+For a least-privilege customer deployment, split the work:
+
+1. A subscription administrator registers `Microsoft.Storage`, `Microsoft.CognitiveServices`, and the gated `Microsoft.CognitiveServices/OpenAI.ContextCacheAllowed` feature, and creates the target resource group.
+2. At the target **resource-group scope**, grant the customer **Contributor** plus **Role Based Access Control Administrator**.
+3. The customer runs `quickstart.ps1 -SkipPrerequisiteRegistration` against that existing resource group. This avoids subscription-level checks that a resource-group-scoped identity may not be allowed to read.
+
+The two resource-group roles are both required by the current template:
+
+| Role | Why it is needed |
+|---|---|
+| **Contributor** | Creates the Azure OpenAI account/deployment, Context Cache account/container, and ARM deployment record. |
+| **Role Based Access Control Administrator** | Creates the `Cognitive Services OpenAI User` role assignment used by the keyless demo. `Contributor` explicitly cannot create role assignments. |
+
+Provider registration requires the provider's `/register/action` permission at subscription scope; built-in **Contributor** and **Owner** include it. Preview-feature registration is also subscription-scoped and may additionally require Microsoft allow-list approval. Email **azurecontextcacherp@microsoft.com** if `OpenAI.ContextCacheAllowed` remains `Pending`.
+
+After deployment, a person or workload calling the model with Microsoft Entra ID needs **Cognitive Services OpenAI User** on the Azure OpenAI account. The template grants it automatically to the deploying user when it creates a new account; the quickstart attempts the same grant when reusing an existing account.
+
+RBAC alone does not guarantee deployment success. Confirm that the subscription has Azure OpenAI S0/model capacity for the selected region and is approved for the Context Cache preview before the customer session.
+
 ---
 
 ## What gets created

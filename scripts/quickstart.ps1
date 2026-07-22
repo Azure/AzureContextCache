@@ -41,6 +41,10 @@
 .PARAMETER SkipPython
     Skip the auto venv + pip install step (assumes you already activated an env with the demo deps).
 
+.PARAMETER SkipPrerequisiteRegistration
+    Skip subscription-level provider and preview-feature checks. Use only after a subscription
+    administrator has confirmed that all prerequisites are registered.
+
 .EXAMPLE
     ./quickstart.ps1
 
@@ -61,7 +65,8 @@ param(
     [string] $ExistingAoaiAccountName,
     [int]    $Runs = 6,
     [switch] $SkipDemo,
-    [switch] $SkipPython
+    [switch] $SkipPython,
+    [switch] $SkipPrerequisiteRegistration
 )
 
 $ErrorActionPreference = 'Stop'
@@ -166,66 +171,70 @@ if ($NamePrefix -and ($NamePrefix -notmatch '^[a-z0-9]{3,12}$')) {
 # ----- 5. Provider + feature registration -----
 Write-Step "Validating RP + preview-feature registration"
 
-$checks = @(
-    @{ Kind='provider'; Namespace='Microsoft.Storage'; Name=$null }
-    @{ Kind='provider'; Namespace='Microsoft.CognitiveServices';  Name=$null }
-    @{ Kind='feature';  Namespace='Microsoft.CognitiveServices';  Name='OpenAI.ContextCacheAllowed' }
-)
+if ($SkipPrerequisiteRegistration) {
+    Write-Warn "Skipping subscription-level registration checks; assuming an administrator completed them."
+} else {
+    $checks = @(
+        @{ Kind='provider'; Namespace='Microsoft.Storage'; Name=$null }
+        @{ Kind='provider'; Namespace='Microsoft.CognitiveServices';  Name=$null }
+        @{ Kind='feature';  Namespace='Microsoft.CognitiveServices';  Name='OpenAI.ContextCacheAllowed' }
+    )
 
-function Get-RegState($c) {
-    if ($c.Kind -eq 'provider') {
-        return az provider show --namespace $c.Namespace --query registrationState -o tsv 2>$null
-    }
-    return az feature show --namespace $c.Namespace --name $c.Name --query properties.state -o tsv 2>$null
-}
-
-$toRegister = @()
-foreach ($c in $checks) {
-    $state = Get-RegState $c
-    $label = if ($c.Kind -eq 'provider') { "provider $($c.Namespace)" } else { "feature  $($c.Namespace)/$($c.Name)" }
-    if ($state -eq 'Registered') {
-        Write-Ok ("{0,-65} {1}" -f $label, $state)
-    } else {
-        Write-Warn ("{0,-65} {1}" -f $label, $(if ($state) { $state } else { 'NotRegistered' }))
-        $toRegister += $c
-    }
-}
-
-if ($toRegister.Count -gt 0) {
-    Write-Info "Registering missing items..."
-    foreach ($c in $toRegister) {
+    function Get-RegState($c) {
         if ($c.Kind -eq 'provider') {
-            az provider register --namespace $c.Namespace | Out-Null
+            return az provider show --namespace $c.Namespace --query registrationState -o tsv 2>$null
+        }
+        return az feature show --namespace $c.Namespace --name $c.Name --query properties.state -o tsv 2>$null
+    }
+
+    $toRegister = @()
+    foreach ($c in $checks) {
+        $state = Get-RegState $c
+        $label = if ($c.Kind -eq 'provider') { "provider $($c.Namespace)" } else { "feature  $($c.Namespace)/$($c.Name)" }
+        if ($state -eq 'Registered') {
+            Write-Ok ("{0,-65} {1}" -f $label, $state)
         } else {
-            az feature register --namespace $c.Namespace --name $c.Name | Out-Null
+            Write-Warn ("{0,-65} {1}" -f $label, $(if ($state) { $state } else { 'NotRegistered' }))
+            $toRegister += $c
         }
     }
-    Write-Info "Waiting for all to reach 'Registered' (up to 10 min, refreshes every 20s)..."
-    $deadline = (Get-Date).AddMinutes(10)
-    do {
-        Start-Sleep -Seconds 20
-        $stillPending = @()
+
+    if ($toRegister.Count -gt 0) {
+        Write-Info "Registering missing items..."
         foreach ($c in $toRegister) {
-            $state = Get-RegState $c
-            $label = if ($c.Kind -eq 'provider') { "provider $($c.Namespace)" } else { "feature  $($c.Namespace)/$($c.Name)" }
-            if ($state -ne 'Registered') {
-                $stillPending += "$label = $state"
+            if ($c.Kind -eq 'provider') {
+                az provider register --namespace $c.Namespace | Out-Null
+            } else {
+                az feature register --namespace $c.Namespace --name $c.Name | Out-Null
             }
         }
-        if ($stillPending.Count -eq 0) { break }
-        Write-Info ("[{0}] still pending: {1}" -f (Get-Date -Format HH:mm:ss), ($stillPending -join '; '))
-    } while ((Get-Date) -lt $deadline)
+        Write-Info "Waiting for all to reach 'Registered' (up to 10 min, refreshes every 20s)..."
+        $deadline = (Get-Date).AddMinutes(10)
+        do {
+            Start-Sleep -Seconds 20
+            $stillPending = @()
+            foreach ($c in $toRegister) {
+                $state = Get-RegState $c
+                $label = if ($c.Kind -eq 'provider') { "provider $($c.Namespace)" } else { "feature  $($c.Namespace)/$($c.Name)" }
+                if ($state -ne 'Registered') {
+                    $stillPending += "$label = $state"
+                }
+            }
+            if ($stillPending.Count -eq 0) { break }
+            Write-Info ("[{0}] still pending: {1}" -f (Get-Date -Format HH:mm:ss), ($stillPending -join '; '))
+        } while ((Get-Date) -lt $deadline)
 
-    $finalPending = @()
-    foreach ($c in $toRegister) {
-        if ((Get-RegState $c) -ne 'Registered') { $finalPending += $c }
-    }
-    if ($finalPending.Count -gt 0) {
-        Write-Warn "Some items did not reach 'Registered' in time. Gated preview features may require allow-listing - email azurecontextcacherp@microsoft.com."
-        $cont = Read-NonEmpty "Continue with deployment anyway? (y/N)" 'N'
-        if ($cont -notmatch '^[Yy]') { throw "Aborted due to incomplete registration." }
-    } else {
-        Write-Ok "All providers and features are Registered."
+        $finalPending = @()
+        foreach ($c in $toRegister) {
+            if ((Get-RegState $c) -ne 'Registered') { $finalPending += $c }
+        }
+        if ($finalPending.Count -gt 0) {
+            Write-Warn "Some items did not reach 'Registered' in time. Gated preview features may require allow-listing - email azurecontextcacherp@microsoft.com."
+            $cont = Read-NonEmpty "Continue with deployment anyway? (y/N)" 'N'
+            if ($cont -notmatch '^[Yy]') { throw "Aborted due to incomplete registration." }
+        } else {
+            Write-Ok "All providers and features are Registered."
+        }
     }
 }
 
@@ -302,10 +311,15 @@ if (-not (Test-Path (Join-Path $demoDir 'code_reviewer_demo.py'))) {
 
 Write-Step "Running keyless demo (DefaultAzureCredential, $Runs iterations)"
 
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Warn "python not in PATH; skipping demo. Install Python 3.10+ to run it."
+$pythonCommand = Get-Command python3 -ErrorAction SilentlyContinue
+if (-not $pythonCommand) {
+    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+}
+if (-not $pythonCommand) {
+    Write-Warn "python3/python not in PATH; skipping demo. Install Python 3.10+ to run it."
     return
 }
+$demoPython = $pythonCommand.Source
 
 Push-Location $demoDir
 try {
@@ -313,12 +327,15 @@ try {
         $venv = Join-Path $demoDir '.venv'
         if (-not (Test-Path $venv)) {
             Write-Info "Creating venv at .venv ..."
-            python -m venv .venv
+            & $demoPython -m venv $venv
         }
-        $activate = Join-Path $venv 'Scripts\Activate.ps1'
-        . $activate
+        $venvPythonRelativePath = if ($IsWindows) { 'Scripts/python.exe' } else { 'bin/python' }
+        $demoPython = Join-Path $venv $venvPythonRelativePath
+        if (-not (Test-Path $demoPython)) {
+            throw "Virtual-environment Python not found at '$demoPython'. Remove '$venv' and re-run."
+        }
         Write-Info "Installing demo requirements (quiet)..."
-        pip install -q -r requirements.txt
+        & $demoPython -m pip install -q -r requirements.txt
     }
 
     $env:AOAI_ENDPOINT   = $endpoint
@@ -326,7 +343,7 @@ try {
     Remove-Item Env:AOAI_API_KEY -ErrorAction SilentlyContinue
 
     Write-Host ""
-    python code_reviewer_demo.py --aad --runs $Runs
+    & $demoPython code_reviewer_demo.py --aad --runs $Runs
     $demoExit = $LASTEXITCODE
 } finally {
     Pop-Location
